@@ -1,0 +1,50 @@
+# Base configuration — shared across all datasets and views
+
+# ─── Data ────────────────────────────────────────────────────────────────────
+data:
+  root: "data"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
+
+# Preprocessing
+preprocess:
+  crop_shape: [160, 192, 152]      # H × W × D after central crop (see D2, DEVIATIONS.md)
+  normalize: minmax                 # per-volume per-modality min-max to [0, 1]
+  modalities: [t1n, t1c, t2w, t2f] # channel order; results in 4-channel tensors
+
+# ─── Model ───────────────────────────────────────────────────────────────────
+model:
+  encoder_channels: [32, 64, 128, 128]    # after initial 4→32 projection
+  decoder_channels: [128, 128, 64, 32]
+  num_heads: 3                             # output channels: ET, TC, WT
+  groupnorm_groups: 8
+  dropout: 0.1
+  # PLIF neuron parameters
+  plif:
+    threshold: 1.0         # θ (see D3)
+    tau_init: 0.0          # τ_param init; λ = sigmoid(0) = 0.5 (see D3)
+
+# ─── Training ────────────────────────────────────────────────────────────────
+training:
+  optimizer: adam
+  lr: 0.001
+  weight_decay: 1.0e-5
+  grad_clip_norm: 0.3
+  batch_size: 8            # sequences per batch (each sequence = one subject × view)
+  max_epochs: 100
+  patience: 10             # early stopping patience (epochs)
+  fptt_alpha: 0.1          # FPTT regularisation strength (grid-searched in paper)
+  loss:
+    bce_weight: 0.5
+    dice_weight: 0.5
+  cv_folds: 5
+
+# ─── Logging / Output ────────────────────────────────────────────────────────
+output:
+  experiments_dir: "experiments"
+  tensorboard: true
+  save_best_by: val_dice   # checkpoint criterion
+
+# ─── Reproducibility ─────────────────────────────────────────────────────────
+seed: 42

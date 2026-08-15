@@ -1,0 +1,7 @@
+# Coronal view — slices along the y-axis (anterior–posterior)
+view:
+  name: coronal
+  axis: 1           # numpy axis index in the (H, W, D) cropped volume
+  num_slices: 192   # W after crop
+  slice_H: 160      # spatial height of each 2D slice
+  slice_W: 152      # spatial width of each 2D slice

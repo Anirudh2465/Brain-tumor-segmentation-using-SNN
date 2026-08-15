@@ -1,0 +1,11 @@
+# BraTS 2017 stub — data not acquired; included for completeness
+# Extends base.yaml
+
+defaults:
+  - base
+
+dataset:
+  name: brats17
+  num_training: 210
+  fold_sizes: [168, 42]  # per-fold: 168 train, 42 test
+  case_prefix: "Brats17_"

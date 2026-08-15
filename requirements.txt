@@ -1,0 +1,14 @@
+torch>=2.2
+numpy
+nibabel
+scikit-image
+scipy
+monai
+pyyaml
+tqdm
+tensorboard
+pytest
+openpyxl
+matplotlib
+pandas
+fvcore

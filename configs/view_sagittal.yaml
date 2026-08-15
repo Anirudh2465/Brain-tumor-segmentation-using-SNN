@@ -1,0 +1,7 @@
+# Sagittal view — slices along the x-axis (left–right)
+view:
+  name: sagittal
+  axis: 0           # numpy axis index in the (H, W, D) cropped volume
+  num_slices: 160   # H after crop
+  slice_H: 192      # spatial height of each 2D slice
+  slice_W: 152      # spatial width of each 2D slice

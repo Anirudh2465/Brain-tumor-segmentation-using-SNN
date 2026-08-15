@@ -1,0 +1,15 @@
+# BraTS 2023 dataset configuration
+# Extends base.yaml
+
+defaults:
+  - base
+
+dataset:
+  name: brats23
+  zip_training: "data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData.zip"
+  zip_validation: "data/ASNR-MICCAI-BraTS2023-GLI-Challenge-ValidationData.zip"
+  num_training: 1251
+  num_validation: 219
+  # 5-fold split sizes: fold 0 has 251 train, rest 250
+  fold_sizes: [251, 250, 250, 250, 250]
+  case_prefix: "BraTS-GLI-"
