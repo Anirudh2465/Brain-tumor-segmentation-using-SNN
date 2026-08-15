@@ -30,5 +30,4 @@ def build_scheduler(optimizer: Optimizer, patience: int = 5, factor: float = 0.5
         patience=patience,
         factor=factor,
         min_lr=1e-6,
-        verbose=True,
     )
