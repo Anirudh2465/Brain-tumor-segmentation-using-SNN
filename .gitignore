@@ -1,5 +1,4 @@
 *.pdf
-DEVIATIONS.md
 spiking-u-seg-net-project-plan.md
 ./data
 ./.pytest_cache
