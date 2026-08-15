@@ -1,0 +1,26 @@
+*.pdf
+DEVIATIONS.md
+spiking-u-seg-net-project-plan.md
+./data
+./.pytest_cache
+
+# Data and outputs
+data/
+experiments/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDEs and environments
+.venv/
+venv/
+env/
+.vscode/
+.idea/
+*.swp
