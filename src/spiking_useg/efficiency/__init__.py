@@ -1,0 +1,1 @@
+"""Efficiency sub-package."""
