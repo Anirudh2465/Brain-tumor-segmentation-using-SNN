@@ -1,11 +1,11 @@
 *.pdf
 spiking-u-seg-net-project-plan.md
-./data
+/data
 ./.pytest_cache
 
 # Data and outputs
-data/
-experiments/
+/data/
+/experiments/
 
 # Python
 __pycache__/
