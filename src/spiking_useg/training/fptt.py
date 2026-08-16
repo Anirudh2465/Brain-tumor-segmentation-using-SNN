@@ -98,73 +98,64 @@ class FPTTOptimizer:
 
     def _init_buffers(self) -> None:
         """Initialize FPTT buffers from current model parameters."""
-        for param in self._param_groups():
-            pid = id(param)
-            self._w_prev[pid] = param.data.clone()
-            self._w_bar[pid] = param.data.clone()
-            self._grad_accum[pid] = torch.zeros_like(param.data)
+        self._params = list(self._param_groups())
+        self._w_prev = [p.data.clone() for p in self._params]
+        self._w_bar = [p.data.clone() for p in self._params]
+        self._grad_accum = [torch.zeros_like(p.data) for p in self._params]
         self._initialized = True
 
-    def _compute_regularizer_loss(self) -> torch.Tensor:
-        """Compute FPTT regularizer R(w_t).
-
-        R(w_t) = (α/2) Σ ‖ w_t − (w̄_t − (1/2α)∇l_{t-1}) ‖²
-
-        Returns:
-            Scalar regularizer tensor.
-        """
-        reg = torch.tensor(0.0, device=next(self._param_groups()).device)
-        for param in self._param_groups():
-            pid = id(param)
-            target_w = self._w_bar[pid] - (1.0 / (2.0 * self.alpha)) * self._grad_accum[pid]
-            diff = param - target_w.detach()
-            reg = reg + (self.alpha / 2.0) * (diff * diff).sum()
-        return reg
-
     def _update_buffers(self) -> None:
-        """Update FPTT state buffers after the optimizer step.
-
-        Updates:
-            ∇l_t = ∇l_{t-1} − α(w_t − w_{t-1})
-            w̄_{t+1} = ½(w_t + w̄_t)
-            w_prev = w_t
-        """
-        for param in self._param_groups():
-            pid = id(param)
-            w_t = param.data.clone()
-            w_prev = self._w_prev[pid]
-            # Update gradient accumulator
-            self._grad_accum[pid] = self._grad_accum[pid] - self.alpha * (w_t - w_prev)
-            # Update running average
-            self._w_bar[pid] = 0.5 * (w_t + self._w_bar[pid])
-            # Save current weights for next step
-            self._w_prev[pid] = w_t
+        """Update FPTT state buffers after the optimizer step."""
+        with torch.no_grad():
+            w_t = [p.data for p in self._params]
+            
+            # ∇l_t = ∇l_{t-1} − α(w_t − w_{t-1})
+            w_diff = torch._foreach_sub(w_t, self._w_prev)
+            torch._foreach_add_(self._grad_accum, w_diff, alpha=-self.alpha)
+            
+            # w̄_{t+1} = ½(w_t + w̄_t)
+            torch._foreach_add_(self._w_bar, w_t)
+            torch._foreach_mul_(self._w_bar, 0.5)
+            
+            # w_prev = w_t
+            self._w_prev = [w.clone() for w in w_t]
 
     def step(self, task_loss: torch.Tensor) -> float:
-        """Perform one FPTT step (one time step / one slice).
-
-        Args:
-            task_loss: Scalar loss from the current time step's prediction.
-
-        Returns:
-            Total loss value (task + regularizer) as a Python float.
-        """
+        """Perform one FPTT step."""
         if not self._initialized:
             self._init_buffers()
 
-        # Add FPTT regularizer to task loss
-        if self._t > 0:
-            reg = self._compute_regularizer_loss()
-            total_loss = task_loss + reg
-        else:
-            total_loss = task_loss  # no regularizer at t=0 (no previous state)
-
-        # Backward through current time step ONLY
         self.base_optimizer.zero_grad()
-        total_loss.backward()
+        task_loss.backward()
+
+        total_loss_val = task_loss.item()
+
+        if self._t > 0:
+            with torch.no_grad():
+                # Manually compute and add regularizer gradients to avoid autograd overhead
+                # target_w = w̄_t - (1/2α)∇l_{t-1}
+                factor = 1.0 / (2.0 * self.alpha)
+                grad_terms = torch._foreach_mul(self._grad_accum, factor)
+                target_w = torch._foreach_sub(self._w_bar, grad_terms)
+                
+                # diff = w_t - target_w
+                w_t = [p.data for p in self._params]
+                diff = torch._foreach_sub(w_t, target_w)
+                
+                # ∇R(w_t) = α * diff
+                reg_grads = torch._foreach_mul(diff, self.alpha)
+                
+                # Calculate reg loss for logging
+                reg_loss_val = (self.alpha / 2.0) * sum([d.pow(2).sum().item() for d in diff])
+                total_loss_val += reg_loss_val
+                
+                # Add reg_grads to param.grad
+                for i, p in enumerate(self._params):
+                    if p.grad is not None:
+                        p.grad.add_(reg_grads[i])
 
         # Gradient clipping (paper: max norm 0.3)
-        params_with_grad = [p for p in self._param_groups() if p.grad is not None]
+        params_with_grad = [p for p in self._params if p.grad is not None]
         if params_with_grad:
             nn.utils.clip_grad_norm_(params_with_grad, max_norm=self.grad_clip_norm)
 
@@ -175,4 +166,4 @@ class FPTTOptimizer:
         self._update_buffers()
         self._t += 1
 
-        return total_loss.item()
+        return total_loss_val
