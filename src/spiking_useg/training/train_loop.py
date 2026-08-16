@@ -46,22 +46,10 @@ def train_one_epoch(
     fptt: FPTTOptimizer,
     device: torch.device,
 ) -> dict[str, float]:
-    """Run one training epoch.
-
-    Args:
-        model: SpikingUSegNet.
-        loader: Training DataLoader (each item is a full subject sequence).
-        fptt: FPTT optimizer.
-        device: CUDA/CPU device.
-
-    Returns:
-        Dict with 'loss' (mean per-slice loss) and 'train_dice' (mean Dice).
-    """
     model.train()
     total_loss = 0.0
     total_dice = 0.0
-    n_subjects = 0
-    n_slices_total = 0
+    n_batches = 0
 
     for batch in loader:
         images = batch["images"].to(device)   # (B, T, 4, H, W)
@@ -69,38 +57,35 @@ def train_one_epoch(
 
         B, T, C, H, W = images.shape
 
-        for b in range(B):
-            # Process one subject sequence
-            img_seq = images[b]    # (T, 4, H, W)
-            tgt_seq = targets[b]   # (T, 3, H, W)
+        model.reset_states()
+        fptt.start_sequence()
 
-            model.reset_states()
-            fptt.start_sequence()
+        slice_dice_sum = 0.0
+        for t in range(T):
+            x_t = images[:, t]   # (B, 4, H, W)
+            y_t = targets[:, t]  # (B, 3, H, W)
 
-            slice_dice_sum = 0.0
-            for t in range(T):
-                x_t = img_seq[t].unsqueeze(0)   # (1, 4, H, W)
-                y_t = tgt_seq[t].unsqueeze(0)   # (1, 3, H, W)
+            pred_t = model(x_t)              # (B, 3, H, W)
+            loss_t = hybrid_loss(pred_t, y_t)
 
-                pred_t = model(x_t)              # (1, 3, H, W)
-                loss_t = hybrid_loss(pred_t, y_t)
+            step_loss = fptt.step(loss_t)
+            total_loss += step_loss
 
-                step_loss = fptt.step(loss_t)
-                total_loss += step_loss
+            with torch.no_grad():
+                d = dice_score(pred_t.detach(), y_t).mean().item()
+                slice_dice_sum += d
 
-                with torch.no_grad():
-                    d = dice_score(pred_t.detach(), y_t).mean().item()
-                    slice_dice_sum += d
+        total_dice += slice_dice_sum / T
+        n_batches += 1
 
-                n_slices_total += 1
+        if n_batches % 25 == 0:
+            cur_loss = total_loss / (n_batches * T)
+            cur_dice = total_dice / n_batches
+            logger.info("Batch %d - Loss: %.4f, Dice: %.4f", n_batches, cur_loss, cur_dice)
 
-            total_dice += slice_dice_sum / T
-            n_subjects += 1
-
-    mean_loss = total_loss / max(n_slices_total, 1)
-    mean_dice = total_dice / max(n_subjects, 1)
+    mean_loss = total_loss / max(n_batches * T, 1)
+    mean_dice = total_dice / max(n_batches, 1)
     return {"loss": mean_loss, "train_dice": mean_dice}
-
 
 @torch.no_grad()
 def validate_one_epoch(
@@ -108,49 +93,33 @@ def validate_one_epoch(
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
-    """Run one validation epoch (no gradients, no FPTT).
-
-    Args:
-        model: SpikingUSegNet.
-        loader: Validation DataLoader.
-        device: CUDA/CPU device.
-
-    Returns:
-        Dict with 'val_dice' (mean Dice over subjects) and per-class Dice.
-    """
     model.eval()
     dice_et = dice_tc = dice_wt = 0.0
-    n_subjects = 0
+    n_batches = 0
 
     for batch in loader:
         images = batch["images"].to(device)
         targets = batch["targets"].to(device)
         B, T, C, H, W = images.shape
 
-        for b in range(B):
-            img_seq = images[b]
-            tgt_seq = targets[b]
+        model.reset_states()
 
-            model.reset_states()
+        all_preds = []
+        for t in range(T):
+            x_t = images[:, t]
+            pred_t = model(x_t)  # (B, 3, H, W)
+            all_preds.append(pred_t.unsqueeze(1)) # (B, 1, 3, H, W)
 
-            # Accumulate predictions per-slice, then aggregate
-            all_preds: list[torch.Tensor] = []
-            for t in range(T):
-                x_t = img_seq[t].unsqueeze(0)
-                pred_t = model(x_t)  # (1, 3, H, W)
-                all_preds.append(pred_t)
+        preds = torch.cat(all_preds, dim=1)   # (B, T, 3, H, W)
+        preds_bin = (preds > 0.5).float()
 
-            preds = torch.cat(all_preds, dim=0)   # (T, 3, H, W)
-            # Threshold predictions for Dice computation
-            preds_bin = (preds > 0.5).float()
+        d = dice_score(preds_bin.view(B * T, 3, H, W), targets.view(B * T, 3, H, W))
+        dice_et += d[0].item()
+        dice_tc += d[1].item()
+        dice_wt += d[2].item()
+        n_batches += 1
 
-            d = dice_score(preds_bin, tgt_seq).mean(dim=(1, 2))  # (3,)
-            dice_et += d[0].item()
-            dice_tc += d[1].item()
-            dice_wt += d[2].item()
-            n_subjects += 1
-
-    n = max(n_subjects, 1)
+    n = max(n_batches, 1)
     return {
         "val_dice_ET": dice_et / n,
         "val_dice_TC": dice_tc / n,
@@ -173,7 +142,7 @@ def train(
     device: Optional[torch.device] = None,
     use_tensorboard: bool = True,
 ) -> dict:
-    """Full training run for one (view × fold) combination.
+    """Full training run for one (view x fold) combination.
 
     Args:
         model: SpikingUSegNet model.
@@ -194,6 +163,9 @@ def train(
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
 
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
