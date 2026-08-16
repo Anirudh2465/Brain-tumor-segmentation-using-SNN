@@ -121,9 +121,10 @@ def main():
     rc = run(
         [py, "-c",
          f"import sys; sys.path.insert(0,'src'); "
-         f"from spiking_useg.eval.report import generate_dice_table, generate_nll_table; "
+         f"from spiking_useg.eval.report import generate_dice_table, generate_nll_table, generate_flops_table; "
          f"generate_dice_table('{args.experiments_dir}','brats23'); "
-         f"generate_nll_table('{args.experiments_dir}','brats23')"],
+         f"generate_nll_table('{args.experiments_dir}','brats23'); "
+         f"generate_flops_table('{args.experiments_dir}','brats23')"],
         "Generating results tables"
     )
 
