@@ -57,7 +57,11 @@ def train_one_epoch(
 
         B, T, C, H, W = images.shape
 
-        model.reset_states()
+        if hasattr(model, 'module'):
+            model.module.reset_states()
+        else:
+            model.reset_states()
+            
         fptt.start_sequence()
 
         slice_dice_sum = 0.0
@@ -103,7 +107,10 @@ def validate_one_epoch(
         targets = batch["targets"].to(device)
         B, T, C, H, W = images.shape
 
-        model.reset_states()
+        if hasattr(model, 'module'):
+            model.module.reset_states()
+        else:
+            model.reset_states()
 
         all_preds = []
         for t in range(T):

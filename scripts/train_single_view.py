@@ -100,6 +100,12 @@ def main() -> None:
     # ── Build model ────────────────────────────────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = SpikingUSegNet()
+    
+    if torch.cuda.device_count() > 1:
+        logger.info("Using %d GPUs with DataParallel!", torch.cuda.device_count())
+        model = torch.nn.DataParallel(model)
+        
+    model.to(device)
     logger.info("Model parameters: %d", sum(p.numel() for p in model.parameters()))
 
     # ── Train ──────────────────────────────────────────────────────────────
