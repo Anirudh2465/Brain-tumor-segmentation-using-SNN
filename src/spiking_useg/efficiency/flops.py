@@ -55,28 +55,9 @@ def measure_snn_flops(
     input_shape: tuple[int, int, int],
     num_timesteps: int = 10,
     device: Optional[torch.device] = None,
+    dataloader = None,
 ) -> dict:
-    """Measure spike-rate-aware FLOPs for the SpikingUSegNet.
-
-    Procedure:
-    1. Run the model for `num_timesteps` random input slices.
-    2. Record average spike rate per SpikingBlock (via forward hooks on PLIFLayer).
-    3. Compute dense FLOPs for one slice using fvcore.
-    4. Effective FLOPs = dense_FLOPs × mean_spike_rate × T.
-
-    Args:
-        model: SpikingUSegNet instance.
-        input_shape: (C, H, W) — e.g. (4, 160, 192) for axial view.
-        num_timesteps: Number of time steps to simulate for spike rate measurement.
-        device: Inference device.
-
-    Returns:
-        Dict with:
-            'dense_flops_per_step': Dense FLOPs per single forward pass.
-            'mean_spike_rate': Average fraction of spiking neurons (over layers and time).
-            'effective_flops_per_step': dense × spike_rate.
-            'effective_flops_per_volume': effective × num_timesteps.
-    """
+    """Measure spike-rate-aware FLOPs for the SpikingUSegNet."""
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -102,9 +83,17 @@ def measure_snn_flops(
     model.reset_states()
     C, H, W = input_shape
     with torch.no_grad():
-        for _ in range(num_timesteps):
-            dummy = torch.randn(1, C, H, W, device=device)
-            model(dummy)
+        if dataloader is not None:
+            batch = next(iter(dataloader))
+            images = batch["images"].to(device) # (B, T, C, H, W)
+            B, T_batch, C_b, H_b, W_b = images.shape
+            for t in range(T_batch):
+                model(images[:, t])
+            num_timesteps = T_batch
+        else:
+            for _ in range(num_timesteps):
+                dummy = torch.randn(1, C, H, W, device=device)
+                model(dummy)
 
     for h in hooks:
         h.remove()
