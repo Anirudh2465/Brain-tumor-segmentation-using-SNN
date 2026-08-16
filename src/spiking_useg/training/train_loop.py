@@ -69,7 +69,9 @@ def train_one_epoch(
 
             with torch.amp.autocast('cuda'):
                 pred_t = model(x_t)              # (B, 3, H, W)
-                loss_t = hybrid_loss(pred_t, y_t)
+            
+            # Compute loss outside autocast in FP32 to prevent BCE autocast errors
+            loss_t = hybrid_loss(pred_t.float(), y_t.float())
 
             step_loss = fptt.step(loss_t, scaler=scaler)
             total_loss += step_loss
