@@ -58,7 +58,9 @@ def predict_volume(
     pred_slices: list[np.ndarray] = []
     for t in range(T):
         x_t = torch.from_numpy(slices[t]).unsqueeze(0).to(device)  # (1, 4, sH, sW)
-        pred_t = model(x_t)   # (1, 3, sH, sW)
+        with torch.amp.autocast('cuda'):
+            pred_t = model(x_t)   # (1, 3, sH, sW) logits
+        pred_t = pred_t.sigmoid() # Convert to probabilities
         pred_slices.append(pred_t.squeeze(0).cpu().numpy())  # (3, sH, sW)
 
     # Stack: (T, 3, sH, sW)

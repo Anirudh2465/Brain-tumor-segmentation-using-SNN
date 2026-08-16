@@ -67,9 +67,10 @@ class TestHybridLoss:
 
     def test_perfect_prediction_low_loss(self):
         """Nearly perfect prediction should yield a very low loss."""
-        pred = torch.full((1, 3, 8, 8), 0.999)   # near 1 everywhere
+        # 10.0 logit is roughly 0.9999 probability
+        pred_logits = torch.full((1, 3, 8, 8), 10.0)
         target = torch.ones(1, 3, 8, 8)
-        loss = hybrid_loss(pred, target)
+        loss = hybrid_loss(pred_logits, target)
         assert loss.item() < 0.05, f"Expected low loss for near-perfect pred, got {loss.item():.4f}"
 
     def test_loss_non_negative(self):

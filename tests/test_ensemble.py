@@ -38,10 +38,10 @@ class TestSpikingUSegNetForward:
         assert out.shape == (1, 3, 64, 64), f"Expected (1, 3, 64, 64), got {out.shape}"
 
     def test_output_in_range(self, model):
-        """Output should be in [0, 1] (Sigmoid applied)."""
+        """Output sigmoid should be in [0, 1] (Model outputs logits)."""
         model.reset_states()
         x = torch.randn(1, 4, 32, 32)
-        out = model(x)
+        out = model(x).sigmoid()
         assert out.min().item() >= 0.0 and out.max().item() <= 1.0, (
             f"Output out of [0,1]: min={out.min().item()}, max={out.max().item()}"
         )

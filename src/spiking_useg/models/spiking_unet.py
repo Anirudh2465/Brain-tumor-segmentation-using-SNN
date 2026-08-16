@@ -174,7 +174,6 @@ class SpikingUSegNet(nn.Module):
 
         # ── Output ────────────────────────────────────────────────────────
         out = self.output_conv(d1)    # (B, 3, H, W) — real-valued logits
-        out = self.sigmoid(out)       # (B, 3, H, W) — probabilities
         return out
 
     @staticmethod

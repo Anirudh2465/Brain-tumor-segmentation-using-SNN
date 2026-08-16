@@ -68,16 +68,14 @@ def train_one_epoch(
             y_t = targets[:, t]  # (B, 3, H, W)
 
             with torch.amp.autocast('cuda'):
-                pred_t = model(x_t)              # (B, 3, H, W)
-            
-            # Compute loss outside autocast in FP32 to prevent BCE autocast errors
-            loss_t = hybrid_loss(pred_t.float(), y_t.float())
+                pred_t = model(x_t)              # (B, 3, H, W) logits
+                loss_t = hybrid_loss(pred_t, y_t)
 
             step_loss = fptt.step(loss_t, scaler=scaler)
             total_loss += step_loss
 
             with torch.no_grad():
-                d = dice_score(pred_t.detach(), y_t).mean().item()
+                d = dice_score(pred_t.detach().sigmoid(), y_t).mean().item()
                 slice_dice_sum += d
 
         total_dice += slice_dice_sum / T
@@ -117,7 +115,7 @@ def validate_one_epoch(
             all_preds.append(pred_t.unsqueeze(1)) # (B, 1, 3, H, W)
 
         preds = torch.cat(all_preds, dim=1)   # (B, T, 3, H, W)
-        preds_bin = (preds > 0.5).float()
+        preds_bin = (preds > 0.0).float()
 
         d = dice_score(preds_bin.view(B * T, 3, H, W), targets.view(B * T, 3, H, W))
         dice_et += d[0].item()
