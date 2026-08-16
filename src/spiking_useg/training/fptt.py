@@ -120,13 +120,19 @@ class FPTTOptimizer:
             # w_prev = w_t
             self._w_prev = [w.clone() for w in w_t]
 
-    def step(self, task_loss: torch.Tensor) -> float:
-        """Perform one FPTT step."""
+    def step(self, task_loss: torch.Tensor, scaler=None) -> float:
+        """Perform one FPTT step with optional AMP GradScaler."""
         if not self._initialized:
             self._init_buffers()
 
         self.base_optimizer.zero_grad()
-        task_loss.backward()
+        
+        if scaler is not None:
+            scaler.scale(task_loss).backward()
+            # Unscale before adding regularizer gradients so they share the same scale
+            scaler.unscale_(self.base_optimizer)
+        else:
+            task_loss.backward()
 
         total_loss_val = task_loss.item()
 
@@ -142,27 +148,29 @@ class FPTTOptimizer:
                 w_t = [p.data for p in self._params]
                 diff = torch._foreach_sub(w_t, target_w)
                 
-                # ∇R(w_t) = α * diff
+                # reg_grads = α * diff
                 reg_grads = torch._foreach_mul(diff, self.alpha)
                 
-                # Calculate reg loss for logging
+                # Track regularization loss for logging: L_reg = (α/2) ||diff||^2
                 reg_loss_val = (self.alpha / 2.0) * sum([d.pow(2).sum().item() for d in diff])
                 total_loss_val += reg_loss_val
                 
-                # Add reg_grads to param.grad
+                # Add reg_grads to param.grad (which is unscaled if scaler is used)
                 for i, p in enumerate(self._params):
                     if p.grad is not None:
                         p.grad.add_(reg_grads[i])
 
-        # Gradient clipping (paper: max norm 0.3)
+        # Gradient clipping
         params_with_grad = [p for p in self._params if p.grad is not None]
         if params_with_grad:
             nn.utils.clip_grad_norm_(params_with_grad, max_norm=self.grad_clip_norm)
 
-        # Base optimizer step (Adam)
-        self.base_optimizer.step()
+        if scaler is not None:
+            scaler.step(self.base_optimizer)
+            scaler.update()
+        else:
+            self.base_optimizer.step()
 
-        # Update FPTT state buffers
         self._update_buffers()
         self._t += 1
 

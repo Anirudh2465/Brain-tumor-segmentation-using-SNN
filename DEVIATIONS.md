@@ -42,6 +42,10 @@ weighting not specified.
 **Assumption:** Effective FLOPs = dense_flops × mean_spike_rate, following
 the "synaptic operations" convention from Yin/Corradi/Bohté (NMI 2023).
 
+### D9 — Automatic Mixed Precision (AMP)
+**Paper says:** The paper does not specify the precision used during training (FP32 vs FP16).
+**Assumption:** To heavily accelerate local training and reduce VRAM consumption (allowing larger batches), PyTorch Automatic Mixed Precision (`torch.amp.autocast` and `GradScaler`) was natively integrated into the FPTT custom optimizer.
+
 ---
 
 ## Data
@@ -58,4 +62,4 @@ not globally across the dataset, to match standard BraTS practice.
 
 ---
 
-*Last updated: 2026-08-15*
+*Last updated: 2026-08-16*

@@ -51,6 +51,8 @@ def train_one_epoch(
     total_dice = 0.0
     n_batches = 0
 
+    scaler = torch.amp.GradScaler('cuda')
+
     for batch in loader:
         images = batch["images"].to(device)   # (B, T, 4, H, W)
         targets = batch["targets"].to(device)  # (B, T, 3, H, W)
@@ -65,10 +67,11 @@ def train_one_epoch(
             x_t = images[:, t]   # (B, 4, H, W)
             y_t = targets[:, t]  # (B, 3, H, W)
 
-            pred_t = model(x_t)              # (B, 3, H, W)
-            loss_t = hybrid_loss(pred_t, y_t)
+            with torch.amp.autocast('cuda'):
+                pred_t = model(x_t)              # (B, 3, H, W)
+                loss_t = hybrid_loss(pred_t, y_t)
 
-            step_loss = fptt.step(loss_t)
+            step_loss = fptt.step(loss_t, scaler=scaler)
             total_loss += step_loss
 
             with torch.no_grad():
@@ -107,7 +110,8 @@ def validate_one_epoch(
         all_preds = []
         for t in range(T):
             x_t = images[:, t]
-            pred_t = model(x_t)  # (B, 3, H, W)
+            with torch.amp.autocast('cuda'):
+                pred_t = model(x_t)  # (B, 3, H, W)
             all_preds.append(pred_t.unsqueeze(1)) # (B, 1, 3, H, W)
 
         preds = torch.cat(all_preds, dim=1)   # (B, T, 3, H, W)
