@@ -119,6 +119,30 @@ def main() -> None:
 
     logger.info("Final best val_dice: %.4f", results["best_val_dice"])
 
+    # ── Measure FLOPs ──────────────────────────────────────────────────────
+    from spiking_useg.efficiency.flops import measure_snn_flops
+    import json
+    
+    # Reload best model weights for accurate spike rates
+    best_model_path = run_dir / "best_model.pth"
+    if best_model_path.exists():
+        model.load_state_dict(torch.load(best_model_path, map_location=device))
+        
+    logger.info("Measuring spike-rate-aware FLOPs on validation batch...")
+    try:
+        sample_shape = tuple(val_loader.dataset[0]["images"].shape[1:]) # (C, H, W)
+        flops_dict = measure_snn_flops(
+            model=model,
+            input_shape=sample_shape,
+            dataloader=val_loader,
+            device=device
+        )
+        with open(run_dir / "flops.json", "w") as f:
+            json.dump(flops_dict, f, indent=2)
+        logger.info("FLOPs measured and saved to %s", run_dir / "flops.json")
+    except Exception as e:
+        logger.error("Failed to measure FLOPs: %s", e)
+
 
 if __name__ == "__main__":
     main()
