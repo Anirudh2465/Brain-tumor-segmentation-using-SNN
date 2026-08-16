@@ -136,9 +136,55 @@ def generate_nll_table(experiments_dir: str | Path, dataset: str = "brats23") ->
     return summary
 
 
+def generate_flops_table(experiments_dir: str | Path, dataset: str = "brats23") -> pd.DataFrame:
+    """Generate Table 3: FLOPs per view."""
+    experiments_dir = Path(experiments_dir)
+    records = []
+    dataset_dir = experiments_dir / dataset
+    if not dataset_dir.exists():
+        return pd.DataFrame()
+
+    for fold_dir in sorted(dataset_dir.iterdir()):
+        if not fold_dir.is_dir() or not fold_dir.name.startswith("fold"):
+            continue
+        for view_dir in sorted(fold_dir.iterdir()):
+            if not view_dir.is_dir():
+                continue
+            view = view_dir.name
+            flops_path = view_dir / "flops.json"
+            if not flops_path.exists():
+                continue
+            with open(flops_path) as f:
+                flops = json.load(f)
+            records.append({"view": view, **flops})
+
+    if not records:
+        print("\nNo FLOPs metrics found. Ensure train_single_view saves flops.json.")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(records)
+    rows = []
+    for view in sorted(df["view"].unique()):
+        vdf = df[df["view"] == view]
+        for col in ["dense_flops_per_step", "mean_spike_rate", "effective_flops_per_step", "effective_flops_per_volume"]:
+            if col in vdf.columns:
+                rows.append({
+                    "view": view,
+                    "metric": col,
+                    "mean": vdf[col].mean(),
+                    "std": vdf[col].std(),
+                })
+
+    summary = pd.DataFrame(rows)
+    print("\n=== Table 3: FLOPs Scores ===")
+    print(summary.to_string(index=False))
+    return summary
+
+
 if __name__ == "__main__":
     import sys
     exp_dir = sys.argv[1] if len(sys.argv) > 1 else "experiments"
     dataset = sys.argv[2] if len(sys.argv) > 2 else "brats23"
     generate_dice_table(exp_dir, dataset)
     generate_nll_table(exp_dir, dataset)
+    generate_flops_table(exp_dir, dataset)
