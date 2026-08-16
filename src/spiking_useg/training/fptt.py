@@ -120,19 +120,13 @@ class FPTTOptimizer:
             # w_prev = w_t
             self._w_prev = [w.clone() for w in w_t]
 
-    def step(self, task_loss: torch.Tensor, scaler=None) -> float:
-        """Perform one FPTT step with optional AMP GradScaler."""
+    def step(self, task_loss: torch.Tensor) -> float:
+        """Perform one FPTT step."""
         if not self._initialized:
             self._init_buffers()
 
         self.base_optimizer.zero_grad()
-        
-        if scaler is not None:
-            scaler.scale(task_loss).backward()
-            # Unscale before adding regularizer gradients so they share the same scale
-            scaler.unscale_(self.base_optimizer)
-        else:
-            task_loss.backward()
+        task_loss.backward()
 
         total_loss_val = task_loss.item()
 
@@ -155,7 +149,7 @@ class FPTTOptimizer:
                 reg_loss_val = (self.alpha / 2.0) * sum([d.pow(2).sum().item() for d in diff])
                 total_loss_val += reg_loss_val
                 
-                # Add reg_grads to param.grad (which is unscaled if scaler is used)
+                # Add reg_grads to param.grad
                 for i, p in enumerate(self._params):
                     if p.grad is not None:
                         p.grad.add_(reg_grads[i])
@@ -165,11 +159,7 @@ class FPTTOptimizer:
         if params_with_grad:
             nn.utils.clip_grad_norm_(params_with_grad, max_norm=self.grad_clip_norm)
 
-        if scaler is not None:
-            scaler.step(self.base_optimizer)
-            scaler.update()
-        else:
-            self.base_optimizer.step()
+        self.base_optimizer.step()
 
         self._update_buffers()
         self._t += 1
