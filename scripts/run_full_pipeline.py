@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data_dir",        type=str, default="data")
     p.add_argument("--experiments_dir", type=str, default="experiments")
     p.add_argument("--views",   nargs="+", default=["axial", "coronal", "sagittal"])
-    p.add_argument("--folds",   nargs="+", type=int, default=[0, 1, 2, 3, 4])
+    p.add_argument("--subset",      type=int,   default=0, help="Train on a subset of data (0 = all)")
     p.add_argument("--epochs",      type=int,   default=100)
     p.add_argument("--batch_size",  type=int,   default=8)
     p.add_argument("--fptt_alpha",  type=float, default=0.1)
@@ -72,10 +72,10 @@ def main():
         rc = run(
             [py, "scripts/run_preprocess.py",
              "--data_dir", args.data_dir,
-             "--subset", "0",        # all subjects
-             "--n_folds", "5",
+             "--subset", str(args.subset),
+             "--n_folds", "1",
              "--seed", str(args.seed)],
-            "Preprocessing (all 1251 subjects)"
+            f"Preprocessing ({args.subset if args.subset > 0 else 'all'} subjects)"
         )
         if rc != 0:
             logger.error("Preprocessing failed. Aborting.")
@@ -83,39 +83,38 @@ def main():
     else:
         logger.info("Skipping preprocessing (--skip_preprocess)")
 
-    # ── Phase 2: Training all views x all folds ────────────────────────────
+    # ── Phase 2: Training all views for fold 0 ─────────────────────────────
     if not args.skip_training:
         rc = run(
-            [py, "scripts/train_all_folds.py",
+            [py, "scripts/train_all_views.py",
              "--views"] + args.views + [
-             "--folds"] + [str(f) for f in args.folds] + [
              "--data_dir",        args.data_dir,
              "--experiments_dir", args.experiments_dir,
+             "--subset",     str(args.subset),
              "--epochs",     str(args.epochs),
              "--batch_size", str(args.batch_size),
              "--fptt_alpha", str(args.fptt_alpha),
              "--patience",   str(args.patience),
              "--seed",       str(args.seed)],
-            f"Training ({len(args.views)} views x {len(args.folds)} folds)"
+            f"Training ({len(args.views)} views)"
         )
         if rc != 0:
             logger.warning("Training returned non-zero exit. Continuing to evaluation.")
     else:
         logger.info("Skipping training (--skip_training)")
 
-    # ── Phase 3: Ensemble evaluation for each fold ─────────────────────────
-    for fold in args.folds:
-        rc = run(
-            [py, "scripts/run_ensemble_eval.py",
-             "--fold",           str(fold),
-             "--data_dir",       args.data_dir,
-             "--experiments_dir", args.experiments_dir,
-             "--views"] + args.views + [
-             "--seed", str(args.seed)],
-            f"Ensemble evaluation fold {fold}"
-        )
-        if rc != 0:
-            logger.warning("Ensemble eval fold %d failed (exit %d). Continuing.", fold, rc)
+    # ── Phase 3: Ensemble evaluation for fold 0 ────────────────────────────
+    rc = run(
+        [py, "scripts/run_ensemble_eval.py",
+         "--fold",           "0",
+         "--data_dir",       args.data_dir,
+         "--experiments_dir", args.experiments_dir,
+         "--views"] + args.views + [
+         "--seed", str(args.seed)],
+        "Ensemble evaluation fold 0"
+    )
+    if rc != 0:
+        logger.warning("Ensemble eval fold 0 failed (exit %d). Continuing.", rc)
 
     # ── Phase 4: Print results tables ─────────────────────────────────────
     rc = run(

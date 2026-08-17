@@ -19,7 +19,7 @@ from pathlib import Path
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train all views × all folds for BraTS 2023")
     p.add_argument("--views", nargs="+", default=["axial", "coronal", "sagittal"])
-    p.add_argument("--folds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
+    p.add_argument("--subset", type=int, default=0)
     p.add_argument("--data_dir", type=str, default="data")
     p.add_argument("--experiments_dir", type=str, default="experiments")
     p.add_argument("--dataset", type=str, default="brats23")
@@ -37,32 +37,33 @@ def main() -> None:
     logger = logging.getLogger(__name__)
 
     script = Path(__file__).parent / "train_single_view.py"
-    total_runs = len(args.views) * len(args.folds)
+    total_runs = len(args.views)
     run_idx = 0
+    fold = 0
 
-    for fold in args.folds:
-        for view in args.views:
-            run_idx += 1
-            logger.info("-" * 60)
-            logger.info("Run %d/%d - view=%s, fold=%d", run_idx, total_runs, view, fold)
+    for view in args.views:
+        run_idx += 1
+        logger.info("-" * 60)
+        logger.info("Run %d/%d - view=%s, fold=%d", run_idx, total_runs, view, fold)
 
-            cmd = [
-                sys.executable, str(script),
-                "--view", view,
-                "--fold", str(fold),
-                "--data_dir", args.data_dir,
-                "--experiments_dir", args.experiments_dir,
-                "--dataset", args.dataset,
-                "--epochs", str(args.epochs),
-                "--batch_size", str(args.batch_size),
-                "--fptt_alpha", str(args.fptt_alpha),
-                "--patience", str(args.patience),
-                "--seed", str(args.seed),
-            ]
+        cmd = [
+            sys.executable, str(script),
+            "--view", view,
+            "--fold", str(fold),
+            "--data_dir", str(args.data_dir),
+            "--experiments_dir", str(args.experiments_dir),
+            "--dataset", args.dataset,
+            "--max_subjects", str(args.subset),
+            "--epochs", str(args.epochs),
+            "--batch_size", str(args.batch_size),
+            "--fptt_alpha", str(args.fptt_alpha),
+            "--patience", str(args.patience),
+            "--seed", str(args.seed),
+        ]
 
-            result = subprocess.run(cmd, check=False)
-            if result.returncode != 0:
-                logger.error("Run failed: view=%s fold=%d (exit code %d)", view, fold, result.returncode)
+        result = subprocess.run(cmd, check=False)
+        if result.returncode != 0:
+            logger.error("Run failed: view=%s fold=%d (exit code %d)", view, fold, result.returncode)
 
     logger.info("All %d runs complete.", total_runs)
 
