@@ -46,11 +46,15 @@ def predict_volume(
         in the canonical orientation.
     """
     model.eval()
-    model.reset_states()
-
+    
     # Get slice sequence: (T, 4, sH, sW)
     slices = slice_volume(data, view)   # (T, 4, sH, sW)
     T = slices.shape[0]
+
+    if hasattr(model, 'module'):
+        model.module.reset_states()
+    else:
+        model.reset_states()
 
     axis, _, (sH, sW) = VIEW_CONFIG[view]
 
