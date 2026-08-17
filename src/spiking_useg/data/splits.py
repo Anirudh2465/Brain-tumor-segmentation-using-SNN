@@ -78,8 +78,13 @@ def generate_splits(
 
     fold_splits: list[dict[str, list[str]]] = []
     for fold_idx in range(n_folds):
-        val_subjects = set(subject_folds[fold_idx].tolist())
-        train_subjects = set(s for s in subject_ids if s not in val_subjects)
+        if n_folds == 1:
+            num_val = max(1, int(len(subject_ids) * 0.2))
+            val_subjects = set(subject_ids[:num_val].tolist())
+            train_subjects = set(subject_ids[num_val:].tolist())
+        else:
+            val_subjects = set(subject_folds[fold_idx].tolist())
+            train_subjects = set(s for s in subject_ids if s not in val_subjects)
 
         val_cases: list[str] = []
         train_cases: list[str] = []

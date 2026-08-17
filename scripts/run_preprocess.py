@@ -70,7 +70,11 @@ def main() -> None:
     logger.info("Preprocessed %d cases.", len(processed_ids))
 
     # ── Step 3: Discover all processed cases and generate splits ──────────
-    all_ids = discover_case_ids(processed_dir)
+    if args.subset > 0:
+        all_ids = processed_ids
+    else:
+        all_ids = discover_case_ids(processed_dir)
+        
     if not all_ids:
         logger.error("No processed cases found in %s.", processed_dir)
         sys.exit(1)
