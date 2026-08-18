@@ -82,10 +82,10 @@ def train_one_epoch(
         total_dice += slice_dice_sum / T
         n_batches += 1
 
-        if n_batches % 25 == 0:
+        if n_batches % 5 == 0 or n_batches == len(loader):
             cur_loss = total_loss / (n_batches * T)
             cur_dice = total_dice / n_batches
-            logger.info("Batch %d - Loss: %.4f, Dice: %.4f", n_batches, cur_loss, cur_dice)
+            logger.info("  Train Batch %d/%d - Loss: %.4f, Dice: %.4f", n_batches, len(loader), cur_loss, cur_dice)
 
     mean_loss = total_loss / max(n_batches * T, 1)
     mean_dice = total_dice / max(n_batches, 1)
@@ -125,6 +125,9 @@ def validate_one_epoch(
         dice_tc += d[1].item()
         dice_wt += d[2].item()
         n_batches += 1
+        
+        if n_batches % 5 == 0 or n_batches == len(loader):
+            logger.info("  Val Batch %d/%d processed", n_batches, len(loader))
 
     n = max(n_batches, 1)
     return {

@@ -41,10 +41,10 @@ read -p "> " view_choice
 
 if [ "$view_choice" == "all" ]; then
     echo "Starting training for ALL views..."
-    python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 8
+    python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 32
 elif [[ "$view_choice" =~ ^(axial|coronal|sagittal)$ ]]; then
     echo "Starting training for $view_choice view only..."
-    python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 8 --views $view_choice
+    python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 32 --views $view_choice
 else
     echo "Invalid choice. Please run the script again or manually run run_full_pipeline.py"
     exit 1
