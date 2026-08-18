@@ -194,9 +194,23 @@ def train(
 
     best_val_dice = -1.0
     no_improve_count = 0
+    start_epoch = 1
     history: list[dict] = []
 
-    for epoch in range(1, max_epochs + 1):
+    # Check for existing checkpoint to resume
+    latest_ckpt_path = run_dir / "latest_model.pt"
+    if latest_ckpt_path.exists():
+        logger.info("Found existing checkpoint: %s. Resuming training...", latest_ckpt_path)
+        checkpoint = torch.load(latest_ckpt_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        base_optim.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        start_epoch = checkpoint["epoch"] + 1
+        best_val_dice = checkpoint.get("best_val_dice", -1.0)
+        no_improve_count = checkpoint.get("no_improve_count", 0)
+        logger.info("Resuming from epoch %d with best_val_dice %.4f", start_epoch, best_val_dice)
+
+    for epoch in range(start_epoch, max_epochs + 1):
         t0 = time.time()
 
         train_metrics = train_one_epoch(model, train_loader, fptt, device)
@@ -250,6 +264,19 @@ def train(
             logger.info("  [BEST] New best val_dice=%.4f -- checkpoint saved.", best_val_dice)
         else:
             no_improve_count += 1
+            logger.info("  No improvement for %d epochs.", no_improve_count)
+
+        # Save latest checkpoint for resuming
+        latest_state = {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": base_optim.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "best_val_dice": best_val_dice,
+            "no_improve_count": no_improve_count,
+            "val_metrics": val_metrics,
+        }
+        torch.save(latest_state, latest_ckpt_path)
 
         # Early stopping
         if no_improve_count >= patience:
