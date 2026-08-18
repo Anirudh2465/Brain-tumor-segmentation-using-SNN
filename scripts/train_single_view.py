@@ -85,16 +85,18 @@ def main() -> None:
         shuffle=True,
         augment=augment,
         require_seg=True,
+        num_workers=8,
     )
 
     val_loader = build_dataloader(
         processed_dir=processed_dir,
         case_ids=val_ids,
         view=args.view,
-        batch_size=1,
+        batch_size=max(1, args.batch_size // 2),
         shuffle=False,
         augment=None,
         require_seg=True,
+        num_workers=8,
     )
 
     # ── Build model ────────────────────────────────────────────────────────
