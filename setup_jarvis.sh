@@ -16,9 +16,20 @@ mkdir -p experiments
 
 echo "================================================="
 echo "Setup Complete!"
-echo "Next Steps:"
-echo "1. Upload your processed dataset to data/processed/"
-echo "   (Drag and drop the 'processed' folder into the JupyterLab file browser)"
-echo "2. Run training with a massive batch size (e.g. 16 or 32):"
-echo "   python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 16"
 echo "================================================="
+echo ""
+echo "Please ensure your 'processed' dataset is extracted to data/processed before continuing."
+echo ""
+echo "Which view would you like to train? (Enter: axial, coronal, sagittal, or all)"
+read -p "> " view_choice
+
+if [ "$view_choice" == "all" ]; then
+    echo "Starting training for ALL views..."
+    python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 32
+elif [[ "$view_choice" =~ ^(axial|coronal|sagittal)$ ]]; then
+    echo "Starting training for $view_choice view only..."
+    python scripts/run_full_pipeline.py --skip_preprocess --epochs 50 --batch_size 32 --views $view_choice
+else
+    echo "Invalid choice. Please run the script again or manually run run_full_pipeline.py"
+    exit 1
+fi
