@@ -38,14 +38,15 @@ if processed_dir.exists():
 
 echo "Which view would you like to train? (Enter: axial, coronal, sagittal, or all)"
 read -p "> " view_choice
+view_choice=$(echo "$view_choice" | tr -d '\r')
 
-if [ "$view_choice" == "all" ]; then
+if [ "$view_choice" = "all" ]; then
     echo "Starting training for ALL views..."
     python scripts/run_full_pipeline.py --skip_preprocess --epochs 20 --batch_size 16
-elif [[ "$view_choice" =~ ^(axial|coronal|sagittal)$ ]]; then
+elif [ "$view_choice" = "axial" ] || [ "$view_choice" = "coronal" ] || [ "$view_choice" = "sagittal" ]; then
     echo "Starting training for $view_choice view only..."
-    python scripts/run_full_pipeline.py --skip_preprocess --epochs 20 --batch_size 16 --views $view_choice
+    python scripts/run_full_pipeline.py --skip_preprocess --epochs 20 --batch_size 16 --views "$view_choice"
 else
-    echo "Invalid choice. Please run the script again or manually run run_full_pipeline.py"
+    echo "Invalid choice: '$view_choice'. Please run the script again."
     exit 1
 fi
