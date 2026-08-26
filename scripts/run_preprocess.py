@@ -35,6 +35,10 @@ def parse_args() -> argparse.Namespace:
                    help="Process only first N subjects (0 = all)")
     p.add_argument("--overwrite", action="store_true",
                    help="Re-process even if output exists")
+    p.add_argument("--delete_raw", action="store_true",
+                   help="Delete each raw NIfTI case folder immediately after its .npy "
+                        "files are saved. Keeps only one case on disk at a time — "
+                        "use when storage is limited.")
     p.add_argument("--n_folds", type=int, default=5,
                    help="Number of CV folds for splits")
     p.add_argument("--seed", type=int, default=42,
@@ -66,6 +70,7 @@ def main() -> None:
         out_dir=processed_dir,
         subset=args.subset,
         overwrite=args.overwrite,
+        delete_raw=args.delete_raw,
     )
     logger.info("Preprocessed %d cases.", len(processed_ids))
 

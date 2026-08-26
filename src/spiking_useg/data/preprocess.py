@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -129,6 +130,7 @@ def preprocess_case(
     out_dir: Path,
     crop_shape: tuple[int, int, int] = CROP_SHAPE,
     overwrite: bool = False,
+    delete_raw: bool = False,
 ) -> Optional[Path]:
     """Preprocess one BraTS case: crop + normalize + save.
 
@@ -185,6 +187,11 @@ def preprocess_case(
         seg = _central_crop(seg, crop_shape)
         np.save(str(out_case_dir / "seg.npy"), seg)
 
+    # ── Delete raw NIfTI folder to reclaim disk space ──────────────────────
+    if delete_raw and case_dir.exists():
+        shutil.rmtree(case_dir)
+        logger.debug("Deleted raw case dir: %s", case_dir)
+
     return out_case_dir
 
 
@@ -193,6 +200,7 @@ def preprocess_dataset(
     out_dir: Path,
     subset: int = 0,
     overwrite: bool = False,
+    delete_raw: bool = False,
 ) -> list[str]:
     """Preprocess all (or a subset of) BraTS cases.
 
@@ -220,9 +228,16 @@ def preprocess_dataset(
     else:
         logger.info("Processing all %d cases.", len(case_dirs))
 
+    if delete_raw:
+        logger.info(
+            "delete_raw=True: raw NIfTI folders will be removed after each case is processed."
+        )
+
     processed_ids: list[str] = []
     for case_dir in tqdm(case_dirs, desc="Preprocessing cases", unit="case"):
-        result = preprocess_case(case_dir, out_dir, overwrite=overwrite)
+        result = preprocess_case(
+            case_dir, out_dir, overwrite=overwrite, delete_raw=delete_raw
+        )
         if result is not None:
             processed_ids.append(case_dir.name)
 
