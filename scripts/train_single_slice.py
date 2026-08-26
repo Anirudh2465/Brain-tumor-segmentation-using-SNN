@@ -141,7 +141,7 @@ def run_visualization(
             save_path     = save_path,
             modality_idx  = 1,  # T1c background
         )
-        logger.info("  Saved overlay → %s", save_path)
+        logger.info("  Saved overlay -> %s", save_path)
         subjects_done += 1
 
     logger.info("Visualization complete: %d PNGs saved to %s", subjects_done, vis_dir)
@@ -227,9 +227,9 @@ def main() -> None:
     if len(train_loader.dataset) == 0:
         logger.error(
             "Training dataset is empty! All %d subject(s) were skipped.\n"
-            "  → Check that preprocessing ran for these case IDs:\n"
+            "  -> Check that preprocessing ran for these case IDs:\n"
             "      %s ...\n"
-            "  → Run: python scripts/run_preprocess.py --subset %d",
+            "  -> Run: python scripts/run_preprocess.py --subset %d",
             len(train_ids), train_ids[:3], len(train_ids),
         )
         sys.exit(1)
