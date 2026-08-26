@@ -129,3 +129,124 @@ def plot_segmentation_comparison(
     if save_path is not None:
         plt.savefig(str(save_path), dpi=150, bbox_inches="tight")
     return fig
+
+
+# ── Single-slice overlay (single-slice axial mode) ────────────────────────────
+
+from pathlib import Path as _Path
+from typing import Optional as _Optional
+
+# Colour map for the 3 tumour regions shown in the overlay panels.
+# Keys are BraTS integer labels; values are RGBA tuples.
+_OVERLAY_COLORS: dict[int, tuple] = {
+    1: (1.0, 0.2, 0.2, 0.65),   # NCR / TC core — red
+    2: (1.0, 1.0, 0.2, 0.55),   # ED  / WT rim  — yellow
+    3: (0.2, 1.0, 0.2, 0.70),   # ET             — green
+}
+
+
+def _seg_to_rgba(seg_2d: np.ndarray, shape_hw: tuple) -> np.ndarray:
+    """Convert an integer label map (H, W) to an RGBA overlay (H, W, 4)."""
+    overlay = np.zeros((*shape_hw, 4), dtype=np.float32)
+    for label, color in _OVERLAY_COLORS.items():
+        mask = seg_2d == label
+        for c in range(4):
+            overlay[mask, c] = color[c]
+    return overlay
+
+
+def plot_slice_overlay(
+    image_slice: np.ndarray,
+    gt_seg_slice: _Optional[np.ndarray],
+    pred_brats: np.ndarray,
+    case_id: str = "",
+    slice_idx: int = -1,
+    save_path: _Optional[_Path | str] = None,
+    modality_idx: int = 1,
+) -> plt.Figure:
+    """3-panel figure: raw MRI | Ground Truth overlay | Prediction overlay.
+
+    Designed for the single-slice axial training mode. The background for all
+    panels is the T1c modality (channel 1 by default), which best highlights
+    the enhancing tumour. Overlaid colours:
+        Green  — ET  (Enhancing Tumour, BraTS label 3)
+        Red    — TC / NCR core (BraTS label 1)
+        Yellow — WT / ED rim  (BraTS label 2)
+
+    Args:
+        image_slice:  float32 ndarray (4, H, W) — 4-modality axial MRI slice.
+        gt_seg_slice: int32 ndarray (H, W) with BraTS labels, or None if no GT.
+        pred_brats:   int32 ndarray (H, W) — predicted BraTS label map
+                      (reconstructed from ET/TC/WT binary masks).
+        case_id:      Subject identifier string (used in figure title).
+        slice_idx:    Axial slice index (used in figure title).
+        save_path:    If provided, save the PNG to this path.
+        modality_idx: Which MRI channel to use as background (default 1 = T1c).
+
+    Returns:
+        Matplotlib Figure.
+    """
+    from matplotlib.patches import Patch
+
+    bg = image_slice[modality_idx]          # (H, W) — T1c background
+    H, W = bg.shape
+
+    n_panels = 3 if gt_seg_slice is not None else 2
+    fig, axes = plt.subplots(1, n_panels, figsize=(5 * n_panels, 5))
+    fig.patch.set_facecolor("#111111")
+
+    modality_label = MODALITY_NAMES[modality_idx]
+    title = (
+        f"{case_id}  |  Axial slice {slice_idx}  |  Background: {modality_label}"
+    )
+    fig.suptitle(title, color="white", fontsize=12, y=1.02)
+
+    def _show_panel(ax, seg_2d, panel_title):
+        # Transpose because imshow with origin='lower' expects (cols, rows)
+        ax.imshow(bg.T, cmap="gray", origin="lower", vmin=0, vmax=1)
+        if seg_2d is not None:
+            overlay = _seg_to_rgba(seg_2d.T, (W, H))
+            ax.imshow(overlay, origin="lower")
+        ax.set_title(panel_title, color="white", fontsize=10, pad=6)
+        ax.axis("off")
+        ax.set_facecolor("#111111")
+
+    _show_panel(axes[0], None, "Raw MRI (T1c)")
+
+    if gt_seg_slice is not None:
+        _show_panel(axes[1], gt_seg_slice, "Ground Truth")
+        _show_panel(axes[2], pred_brats,   "Prediction")
+    else:
+        _show_panel(axes[1], pred_brats, "Prediction")
+
+    # Legend
+    legend_elements = [
+        Patch(facecolor=_OVERLAY_COLORS[3][:3], alpha=_OVERLAY_COLORS[3][3],
+              label="ET  (Enhancing)"),
+        Patch(facecolor=_OVERLAY_COLORS[1][:3], alpha=_OVERLAY_COLORS[1][3],
+              label="TC / NCR Core"),
+        Patch(facecolor=_OVERLAY_COLORS[2][:3], alpha=_OVERLAY_COLORS[2][3],
+              label="WT / ED Rim"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="lower center",
+        ncol=3,
+        fontsize=9,
+        framealpha=0.3,
+        facecolor="#222222",
+        labelcolor="white",
+        bbox_to_anchor=(0.5, -0.06),
+    )
+
+    plt.tight_layout()
+    if save_path is not None:
+        save_path = _Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(
+            str(save_path), dpi=150, bbox_inches="tight",
+            facecolor=fig.get_facecolor(),
+        )
+        plt.close(fig)
+
+    return fig
