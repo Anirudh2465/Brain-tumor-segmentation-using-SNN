@@ -184,6 +184,23 @@ def main() -> None:
 
     processed_dir = args.data_dir / "processed"
 
+    # ── Pre-flight: check processed data exists ──────────────────────────
+    if not processed_dir.exists() or not any(processed_dir.iterdir()):
+        logger.error(
+            "\n"
+            "  ╔══════════════════════════════════════════════════════════╗\n"
+            "  ║  PREPROCESSED DATA NOT FOUND                            ║\n"
+            "  ║                                                          ║\n"
+            "  ║  Expected directory: %s\n"
+            "  ║                                                          ║\n"
+            "  ║  Run preprocessing first:                               ║\n"
+            "  ║    python scripts/run_preprocess.py --subset 5          ║\n"
+            "  ║  (--subset 5 processes only 5 cases for a quick test)   ║\n"
+            "  ╚══════════════════════════════════════════════════════════╝",
+            processed_dir,
+        )
+        sys.exit(1)
+
     # ── Build DataLoaders ────────────────────────────────────────────────
     train_loader = build_single_slice_dataloader(
         processed_dir     = processed_dir,
@@ -205,6 +222,24 @@ def main() -> None:
         require_seg       = True,
         num_workers       = args.num_workers,
     )
+
+    # ── Check datasets are non-empty ─────────────────────────────────────
+    if len(train_loader.dataset) == 0:
+        logger.error(
+            "Training dataset is empty! All %d subject(s) were skipped.\n"
+            "  → Check that preprocessing ran for these case IDs:\n"
+            "      %s ...\n"
+            "  → Run: python scripts/run_preprocess.py --subset %d",
+            len(train_ids), train_ids[:3], len(train_ids),
+        )
+        sys.exit(1)
+    if len(val_loader.dataset) == 0:
+        logger.error(
+            "Validation dataset is empty! Check that preprocessing ran for val subjects.\n"
+            "  → Run: python scripts/run_preprocess.py --subset %d",
+            len(train_ids) + len(val_ids),
+        )
+        sys.exit(1)
 
     logger.info(
         "DataLoaders ready: %d train slices / %d val slices.",
