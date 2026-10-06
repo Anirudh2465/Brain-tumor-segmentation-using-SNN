@@ -27,7 +27,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from spiking_useg.models.layers import SpikingBlock
+from spiking_useg.models.layers import SpikingBlock, SpikingSpatialAttention
 
 
 class SpikingUSegNet(nn.Module):
@@ -78,6 +78,11 @@ class SpikingUSegNet(nn.Module):
         self.enc1 = SpikingBlock(encoder_channels[0], encoder_channels[1], **block_kwargs)
         self.enc2 = SpikingBlock(encoder_channels[1], encoder_channels[2], **block_kwargs)
         self.enc3 = SpikingBlock(encoder_channels[2], encoder_channels[3], **block_kwargs)
+
+        # ── Spiking Attention (Skip connections) ─────────────────────────
+        self.attn2 = SpikingSpatialAttention(kernel_size=7)
+        self.attn1 = SpikingSpatialAttention(kernel_size=7)
+        self.attn0 = SpikingSpatialAttention(kernel_size=7)
 
         # ── Decoder (3 upsampling levels) ────────────────────────────────
         # up3: upsample + concat(skip enc2) + block
@@ -159,17 +164,20 @@ class SpikingUSegNet(nn.Module):
         # ── Decoder ───────────────────────────────────────────────────────
         # Up to (H/4, W/4)
         d3 = self.up3_conv(e3)                        # (B, 128, H/4, W/4)
-        d3 = self._pad_and_cat(d3, e2)               # (B, 256, H/4, W/4)
+        e2_attn = self.attn2(e2)                      # Gate skip connection
+        d3 = self._pad_and_cat(d3, e2_attn)          # (B, 256, H/4, W/4)
         d3 = self.dec3(d3)                            # (B, 128, H/4, W/4)
 
         # Up to (H/2, W/2)
         d2 = self.up2_conv(d3)                        # (B, 64, H/2, W/2)
-        d2 = self._pad_and_cat(d2, e1)               # (B, 128, H/2, W/2)
+        e1_attn = self.attn1(e1)                      # Gate skip connection
+        d2 = self._pad_and_cat(d2, e1_attn)          # (B, 128, H/2, W/2)
         d2 = self.dec2(d2)                            # (B, 64, H/2, W/2)
 
         # Up to (H, W)
         d1 = self.up1_conv(d2)                        # (B, 32, H, W)
-        d1 = self._pad_and_cat(d1, e0)               # (B, 64, H, W)
+        e0_attn = self.attn0(e0)                      # Gate skip connection
+        d1 = self._pad_and_cat(d1, e0_attn)          # (B, 64, H, W)
         d1 = self.dec1(d1)                            # (B, 32, H, W)
 
         # ── Output ────────────────────────────────────────────────────────

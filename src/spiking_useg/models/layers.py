@@ -78,3 +78,43 @@ class SpikingBlock(nn.Module):
         x = self.dropout(x)
         x = self.plif(x)
         return x
+
+
+class SpikingSpatialAttention(nn.Module):
+    """Spiking Spatial Attention block for noise suppression.
+    
+    Computes spatial attention from binary spikes (or continuous features)
+    and gates them to suppress background noise.
+    Matches standard Spatial Attention (CBAM) adapted for SNNs.
+    """
+
+    def __init__(self, kernel_size: int = 7) -> None:
+        super().__init__()
+        assert kernel_size in (3, 7), "kernel size must be 3 or 7"
+        padding = 3 if kernel_size == 7 else 1
+
+        self.conv = nn.Conv2d(2, 1, kernel_size=kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Process one time-step slice.
+        
+        Args:
+            x: Input tensor (B, C, H, W) — usually binary spikes.
+            
+        Returns:
+            Gated tensor (B, C, H, W).
+        """
+        # Channel-wise max and avg pooling
+        max_out, _ = torch.max(x, dim=1, keepdim=True)  # (B, 1, H, W)
+        avg_out = torch.mean(x, dim=1, keepdim=True)    # (B, 1, H, W)
+        
+        # Concat along channel axis
+        attn = torch.cat([max_out, avg_out], dim=1)     # (B, 2, H, W)
+        
+        # Convolve and activate
+        attn = self.conv(attn)                          # (B, 1, H, W)
+        attn = self.sigmoid(attn)                       # (B, 1, H, W)
+        
+        # Gate the input
+        return x * attn
