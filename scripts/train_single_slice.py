@@ -21,6 +21,11 @@ Full run with custom data dir:
 
 from __future__ import annotations
 
+import os
+# Suppress TensorFlow C++ and oneDNN warnings triggered by TensorBoard
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import argparse
 import logging
 import sys
@@ -158,7 +163,7 @@ def main() -> None:
         args.experiments_dir
         / args.dataset
         / f"fold{args.fold}"
-        / "axial_slice"
+        / "axial_slice_attention"
     )
     setup_logging(log_dir=run_dir, run_name="train_slice", level=logging.INFO)
     logger = logging.getLogger(__name__)
