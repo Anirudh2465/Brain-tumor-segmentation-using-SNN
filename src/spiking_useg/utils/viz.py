@@ -250,3 +250,54 @@ def plot_slice_overlay(
         plt.close(fig)
 
     return fig
+
+
+def plot_subregion_comparison(
+    image_slice: np.ndarray,
+    target_multi: np.ndarray,
+    pred_multi: np.ndarray,
+    case_id: str,
+    slice_idx: int,
+    save_path: _Optional[_Path | str] = None,
+) -> plt.Figure:
+    """Creates a 3x3 grid comparing subregions (ET, TC, WT).
+    
+    Rows: ET, TC, WT
+    Cols: Raw T1c, Prediction (binary), Ground Truth (binary)
+    """
+    bg = image_slice[1]  # T1c
+    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
+    fig.patch.set_facecolor("#111111")
+    
+    regions = ["Enhancing Tumor (ET)", "Tumor Core (TC)", "Whole Tumor (WT)"]
+    
+    for row in range(3):
+        # Col 0: Raw
+        axes[row, 0].imshow(bg.T, cmap="gray", origin="lower", vmin=0, vmax=1)
+        axes[row, 0].set_title(f"Raw T1c ({regions[row]})", color="white", fontsize=10)
+        
+        # Col 1: Pred
+        axes[row, 1].imshow(bg.T, cmap="gray", origin="lower", vmin=0, vmax=1)
+        axes[row, 1].imshow(pred_multi[row].T, cmap="Reds", alpha=0.5 * pred_multi[row].T, origin="lower")
+        axes[row, 1].set_title(f"Predicted {regions[row]}", color="white", fontsize=10)
+        
+        # Col 2: Actual
+        axes[row, 2].imshow(bg.T, cmap="gray", origin="lower", vmin=0, vmax=1)
+        axes[row, 2].imshow(target_multi[row].T, cmap="Greens", alpha=0.5 * target_multi[row].T, origin="lower")
+        axes[row, 2].set_title(f"Actual {regions[row]}", color="white", fontsize=10)
+        
+        for col in range(3):
+            axes[row, col].axis("off")
+            axes[row, col].set_facecolor("#111111")
+
+    title = f"{case_id}  |  Axial slice {slice_idx}  |  Subregion Analysis"
+    fig.suptitle(title, color="white", fontsize=14, y=1.02)
+    plt.tight_layout()
+    
+    if save_path is not None:
+        save_path = _Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(str(save_path), dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        plt.close(fig)
+        
+    return fig
