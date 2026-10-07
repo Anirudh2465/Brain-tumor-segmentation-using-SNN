@@ -45,6 +45,7 @@ def train_one_epoch_slices(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    scaler: Optional[torch.amp.GradScaler] = None,
     grad_clip_norm: float = 1.0,
 ) -> dict[str, float]:
     """Train for one epoch over individual slices.
@@ -75,14 +76,25 @@ def train_one_epoch_slices(
             model.reset_states()
 
         optimizer.zero_grad()
-        pred = model(image)                   # (B, 3, H, W)  — probabilities [0,1]
-        loss = hybrid_loss(pred, target)
-        loss.backward()
-
-        if grad_clip_norm > 0:
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
-
-        optimizer.step()
+        
+        if scaler is not None:
+            with torch.autocast(device_type="cuda"):
+                pred = model(image)
+            # Compute loss in float32 for numeric stability (AMP safety)
+            loss = hybrid_loss(pred.float(), target.float())
+            scaler.scale(loss).backward()
+            if grad_clip_norm > 0:
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            pred = model(image)
+            loss = hybrid_loss(pred, target)
+            loss.backward()
+            if grad_clip_norm > 0:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+            optimizer.step()
 
         with torch.no_grad():
             pred_bin = (pred.detach() > 0.5).float()
@@ -202,6 +214,7 @@ def train_slices(
         model.parameters(), lr=lr, weight_decay=weight_decay
     )
     scheduler = build_scheduler(optimizer)
+    scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     writer: Optional[SummaryWriter] = None
     if use_tensorboard:
@@ -232,7 +245,7 @@ def train_slices(
         t0 = time.time()
 
         train_metrics = train_one_epoch_slices(
-            model, train_loader, optimizer, device, grad_clip_norm
+            model, train_loader, optimizer, device, scaler, grad_clip_norm
         )
         val_metrics = validate_one_epoch_slices(model, val_loader, device)
 

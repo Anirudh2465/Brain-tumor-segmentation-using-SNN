@@ -27,6 +27,7 @@ def train_one_epoch_2_5d(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    scaler: Optional[torch.amp.GradScaler] = None,
     grad_clip_norm: float = 1.0,
 ) -> dict[str, float]:
     model.train()
@@ -49,19 +50,28 @@ def train_one_epoch_2_5d(
 
         optimizer.zero_grad()
 
-        # Iterate through the sequence to build up temporal memory
-        for t in range(T):
-            x_t = image[:, t]
-            pred_t = model(x_t)
-
-        # We only care about the prediction at the final step T-1 for loss
-        loss = hybrid_loss(pred_t, target)
-        loss.backward()
-
-        if grad_clip_norm > 0:
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
-
-        optimizer.step()
+        if scaler is not None:
+            with torch.autocast(device_type="cuda"):
+                for t in range(T):
+                    x_t = image[:, t]
+                    pred_t = model(x_t)
+            # Compute loss in float32
+            loss = hybrid_loss(pred_t.float(), target.float())
+            scaler.scale(loss).backward()
+            if grad_clip_norm > 0:
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            for t in range(T):
+                x_t = image[:, t]
+                pred_t = model(x_t)
+            loss = hybrid_loss(pred_t, target)
+            loss.backward()
+            if grad_clip_norm > 0:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+            optimizer.step()
 
         with torch.no_grad():
             pred_bin = (pred_t.detach() > 0.5).float()
@@ -149,6 +159,8 @@ def train_2_5d_loop(
 
     best_val_dice = -1.0
     metrics_history = []
+    
+    scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     for epoch in range(1, epochs + 1):
         logger.info("-" * 40)
@@ -156,7 +168,7 @@ def train_2_5d_loop(
         t0 = time.time()
 
         train_metrics = train_one_epoch_2_5d(
-            model, train_loader, optimizer, device, grad_clip_norm
+            model, train_loader, optimizer, device, scaler, grad_clip_norm
         )
         val_metrics = validate_one_epoch_2_5d(model, val_loader, device)
 
