@@ -62,14 +62,19 @@ class BraTS25DDataset(Dataset):
                 seg_axial = np.moveaxis(seg, _AXIAL_AXIS, 0)
                 total_pixels = seg_axial.shape[1] * seg_axial.shape[2]
 
+                max_tumor_frac = -1.0
+                best_t = -1
                 for t in range(_AXIAL_T):
                     tumor_frac = float((seg_axial[t] > 0).sum()) / total_pixels
-                    if tumor_frac >= min_tumor_fraction:
-                        # Add target slice Z
-                        self._index.append((cid, t))
+                    if tumor_frac > max_tumor_frac:
+                        max_tumor_frac = tumor_frac
+                        best_t = t
+                
+                if max_tumor_frac >= min_tumor_fraction and best_t != -1:
+                    # Add only the target slice Z with the most tumor
+                    self._index.append((cid, best_t))
             else:
-                for t in range(_AXIAL_T):
-                    self._index.append((cid, t))
+                self._index.append((cid, _AXIAL_T // 2))
 
         logger.info(
             "BraTS25DDataset: %d cases, %d sequence targets "
